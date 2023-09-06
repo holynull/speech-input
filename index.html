@@ -1,30 +1,152 @@
 <!DOCTYPE html>
+<html lang="en">
 
-<meta charset="utf-8">
-<title>Simple speech input for inputs and textareas</title>
-<meta name="viewport" content="width=540">
-<link rel="stylesheet" href="speech-input.css">
-<link rel="stylesheet" href="demo.css">
+<head>
+	<title>Simple speech input for inputs and textareas</title>
 
-<h1>
-	<code><span class="tag-marker">&lt;</span><span class="tag-name">input</span><span class="tag-marker">&gt;</span></code> and <code><span class="tag-marker">&lt;</span><span class="tag-name">textarea</span><span class="tag-marker">&gt;</span></code> speech recognition
-	<a class="github-button" href="https://github.com/Daniel-Hug/speech-input" data-icon="octicon-star" data-style="mega" data-count-href="/Daniel-Hug/speech-input/stargazers" data-show-count="true" data-count-aria-label="# stargazers on GitHub" aria-label="Star Daniel-Hug/speech-input on GitHub">Star</a>
-</h1>
+</head>
 
-<form action="." method="get">
 
-<h2>Single-line input</h2>
-<input type="text" class="speech-input" placeholder="What's up?" name="eng-input">
+<body>
+	<input type="text" id="user_input">
+	<button id="btn_start" onclick="start()">开始</button>
+	<button id="btn_stop" onclick="recognition.stop()">结束</button>
+	<span>当前语言<span id="cur_lang"></span></span>
+	<label>改变语言为：</label><button id="btn_lang" onclick="changeLang(event)"></button>
+</body>
+<script>
+	var recognition; // 语音输入组件对象
+	var inputEl = document.getElementById("user_input");
+	var btn_start = document.getElementById("btn_start");
+	var btn_stop = document.getElementById("btn_stop");
+	var cur_lang_span = document.getElementById("cur_lang")
+	var lang = navigator.language
+		? navigator.language
+		: navigator.browserLanguage; // 获得浏览器语言
+	var btn_lang = document.getElementById("btn_lang");
 
-<h2>Single-line input (Spanish)</h2>
-<input type="text" class="speech-input" placeholder="¿Qué tal?" data-ready="Habla ahora" name="spa-input" lang="es">
+	function changeLang(event) { // 改变语音识别的语言
+		recognition.lang = btn_lang.innerHTML;
+		if (recognition.lang.toLowerCase() === "zh") {
+			btn_lang.innerHTML = "en"
+		} else {
+			btn_lang.innerHTML = "zh"
+		}
+		cur_lang_span.innerHTML = recognition.lang
+	}
+	function capitalize(str) {
+		return str.charAt(0).toUpperCase() + str.slice(1);
+	}
+	(function () {
+		'use strict';
+		// check for support (webkit only)
+		if (!('webkitSpeechRecognition' in window)) return; // 判断是否支持语音识别
 
-<h2>Multi-line text area</h2>
-<textarea class="speech-input" placeholder="What's your story?" rows="10" cols="40" name="eng-textarea"></textarea>
+		// seconds to wait for more input after last
+		var defaultPatienceThreshold = 6;
 
-</form>
+		var timeout;
+		var prefix = '';
+		var patience = defaultPatienceThreshold;
 
-<script src="speech-input.js"></script>
+		btn_start.disabled = false;
+		btn_stop.disabled = true;
+		var recognizing = false;
 
-<!-- Place this tag in your head or just before your close body tag. -->
-<script async defer src="https://buttons.github.io/buttons.js"></script>
+		recognition = new webkitSpeechRecognition();// 初始化语音识别
+		/**
+		 * 然后设置语音识别的参数
+		 **/
+		recognition.continuous = true;
+		recognition.interimResults = true;
+		if (lang.toLowerCase() === "zh-cn") {
+			btn_lang.innerHTML = "en"
+			recognition.lang = "zh"
+		} else {
+			btn_lang.innerHTML = "zh"
+			recognition.lang = "en"
+		}
+		cur_lang_span.innerHTML = recognition.lang
+
+		/**
+		 * 用来控制超时没有输入，会自动停止语音识别。
+		 **/
+		function restartTimer() {
+			timeout = setTimeout(function () {
+				recognition.stop();
+			}, patience * 1000);
+		}
+
+		recognition.onstart = function () {// 语音识别开始触发
+			recognizing = true;
+			restartTimer();
+			btn_start.disabled = true;
+			btn_stop.disabled = false;
+			btn_lang.disabled = true;
+		};
+
+		recognition.onend = function () {// 语音识别结束触发
+			recognizing = false;
+			clearTimeout(timeout);
+
+			// If the <input> has data-instant-submit and a value,
+			if (inputEl.dataset.instantSubmit !== undefined && inputEl.value) {
+				// submit the form it's in (if it is in one).
+				if (inputEl.form) inputEl.form.submit();
+			}
+			btn_start.disabled = false;
+			btn_stop.disabled = true;
+			btn_lang.disabled = false;
+		};
+
+		recognition.onresult = function (event) { // 语音识别出结果时触发
+			clearTimeout(timeout);
+
+			// get SpeechRecognitionResultList object
+			var resultList = event.results;
+
+			// go through each SpeechRecognitionResult object in the list
+			var finalTranscript = '';
+			var interimTranscript = '';
+			for (var i = event.resultIndex; i < resultList.length; ++i) {
+				var result = resultList[i];
+
+				// get this result's first SpeechRecognitionAlternative object
+				var firstAlternative = result[0];
+
+				if (result.isFinal) {
+					finalTranscript = firstAlternative.transcript;
+				} else {
+					interimTranscript += firstAlternative.transcript;
+				}
+			}
+
+			// capitalize transcript if start of new sentence
+			var transcript = finalTranscript || interimTranscript;
+			transcript = !prefix || isSentence ? capitalize(transcript) : transcript;
+
+			// append transcript to cached input value
+			inputEl.value = prefix + transcript;
+
+			// set cursur and scroll to end
+			inputEl.focus();
+			if (inputEl.tagName === 'INPUT') {
+				inputEl.scrollLeft = inputEl.scrollWidth;
+			} else {
+				inputEl.scrollTop = inputEl.scrollHeight;
+			}
+
+			restartTimer();
+		};
+	})();
+	function start(event) {// 开始语音识别，请注意不要去掉字符串处理，这样的话体验会更好一些
+		var endsWithWhitespace = inputEl.value.slice(-1).match(/\s/);
+		prefix = !inputEl.value || endsWithWhitespace ? inputEl.value : inputEl.value + ' ';
+
+		// check if value ends with a sentence
+		isSentence = prefix.trim().slice(-1).match(/[\.\?\!]/);
+		recognition.start()
+	}
+</script>
+
+</html>
