@@ -97,8 +97,9 @@
 			btn_start.disabled = false;
 			btn_stop.disabled = true;
 			btn_lang.disabled = false;
+			final_counter = 0;
 		};
-
+		var final_counter = 0;
 		recognition.onresult = function (event) { // 语音识别出结果时触发
 			clearTimeout(timeout);
 
@@ -113,9 +114,10 @@
 
 				// get this result's first SpeechRecognitionAlternative object
 				var firstAlternative = result[0];
-
+				var n_final_counter = final_counter;
 				if (result.isFinal) {
 					finalTranscript = firstAlternative.transcript;
+					n_final_counter = final_counter + 1;
 				} else {
 					interimTranscript += firstAlternative.transcript;
 				}
@@ -125,6 +127,10 @@
 			var transcript = finalTranscript || interimTranscript;
 			transcript = !prefix || isSentence ? capitalize(transcript) : transcript;
 
+			if (n_final_counter > final_counter) {
+				prefix = inputEl.value;
+				final_counter = n_final_counter;
+			}
 			// append transcript to cached input value
 			inputEl.value = prefix + transcript;
 
